@@ -1,0 +1,2 @@
+aws-lambda-rie-386 should be able to be used in replace of aws-lambda-rie
+aws-lambda-rie-amd64 is the renamed version of aws-lambda-rie-x86_64
