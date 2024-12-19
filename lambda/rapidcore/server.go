@@ -1,6 +1,12 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * Required patches:
+ * - Fix already reserved panic on concurrent invokes
+ *		https://github.com/aws/aws-lambda-runtime-interface-emulator/pull/133/files
+ */
+
 package rapidcore
 
 import (
@@ -114,59 +120,35 @@ type Server struct {
 var _ interop.Server = (*Server)(nil)
 
 func (s *Server) setRapidPhase(phase rapidPhase) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
 	s.rapidPhase = phase
 }
 
 func (s *Server) getRapidPhase() rapidPhase {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
 	return s.rapidPhase
 }
 
 func (s *Server) setRuntimeState(state runtimeState) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
 	s.runtimeState = state
 }
 
 func (s *Server) getRuntimeState() runtimeState {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
 	return s.runtimeState
 }
 
 func (s *Server) SetInvokeTimeout(timeout time.Duration) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
 	s.invokeTimeout = timeout
 }
 
 func (s *Server) GetInvokeTimeout() time.Duration {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
 	return s.invokeTimeout
 }
 
 func (s *Server) GetInvokeContext() *InvokeContext {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
 	ctx := *s.invokeCtx
 	return &ctx
 }
 
 func (s *Server) setNewInvokeContext(invokeID string, traceID, lambdaSegmentID string) (*ReserveResponse, error) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
 	if s.invokeCtx != nil {
 		return nil, ErrAlreadyReserved
 	}
@@ -233,9 +215,6 @@ func (s *Server) awaitInitCompletion() {
 }
 
 func (s *Server) setReplyStream(w http.ResponseWriter, direct bool) (string, error) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
 	if s.invokeCtx == nil {
 		return "", ErrNotReserved
 	}
@@ -255,9 +234,6 @@ func (s *Server) setReplyStream(w http.ResponseWriter, direct bool) (string, err
 
 // Release closes the invocation, making server ready for reserve again
 func (s *Server) Release() error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
 	if s.invokeCtx == nil {
 		return ErrNotReserved
 	}
@@ -274,9 +250,6 @@ func (s *Server) Release() error {
 
 // GetCurrentInvokeID
 func (s *Server) GetCurrentInvokeID() string {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
 	if s.invokeCtx == nil {
 		return ""
 	}
@@ -357,8 +330,6 @@ func (s *Server) sendResponseUnsafe(invokeID string, additionalHeaders map[strin
 
 func (s *Server) SendResponse(invokeID string, headers map[string]string, reader io.Reader, trailers http.Header, request *interop.CancellableRequest) error {
 	s.setRuntimeState(runtimeInvokeResponseSent)
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	runtimeCalledResponse := true
 	return s.sendResponseUnsafe(invokeID, headers, http.StatusOK, reader, trailers, request, runtimeCalledResponse)
 }
@@ -379,8 +350,6 @@ func (s *Server) SendInitErrorResponse(invokeID string, resp *interop.ErrorRespo
 func (s *Server) SendErrorResponse(invokeID string, resp *interop.ErrorResponse) error {
 	log.Debugf("Sending Error Response: %s", resp.ErrorType)
 	s.setRuntimeState(runtimeInvokeError)
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	additionalHeaders := map[string]string{contentTypeHeader: resp.ContentType, errorTypeHeader: resp.ErrorType}
 	if functionResponseMode := resp.FunctionResponseMode; functionResponseMode != "" {
 		additionalHeaders[functionResponseModeHeader] = functionResponseMode
@@ -485,14 +454,10 @@ func deadlineNsFromTimeoutMs(timeoutMs int64) int64 {
 }
 
 func (s *Server) setInitFailuresChan() {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	s.initFailures = make(chan interop.InitFailure)
 }
 
 func (s *Server) getInitFailuresChan() chan interop.InitFailure {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	return s.initFailures
 }
 
@@ -580,14 +545,10 @@ func (s *Server) FastInvoke(w http.ResponseWriter, i *interop.Invoke, direct boo
 }
 
 func (s *Server) setCachedInitErrorResponse(errResp *interop.ErrorResponse) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	s.cachedInitErrorResponse = errResp
 }
 
 func (s *Server) getCachedInitErrorResponse() *interop.ErrorResponse {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	return s.cachedInitErrorResponse
 }
 
@@ -600,8 +561,6 @@ func (s *Server) trySendDefaultErrorResponse(resp *interop.ErrorResponse) {
 }
 
 func (s *Server) CurrentToken() *interop.Token {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	if s.invokeCtx == nil {
 		return nil
 	}
@@ -612,6 +571,9 @@ func (s *Server) CurrentToken() *interop.Token {
 // Invoke is used by the Runtime Interface Emulator (Rapid Local)
 // https://github.com/aws/aws-lambda-runtime-interface-emulator
 func (s *Server) Invoke(responseWriter http.ResponseWriter, invoke *interop.Invoke) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
 	resetCtx, resetCancel := context.WithCancel(context.Background())
 	defer resetCancel()
 
@@ -749,7 +711,7 @@ func (s *Server) awaitInitialized() (initCompletionResponse, error) {
 // since it can be called twice when a caller wants to wait until init is complete
 func (s *Server) AwaitInitialized() error {
 	if _, err := s.awaitInitialized(); err != nil {
-		if releaseErr := s.Release(); err != nil {
+		if releaseErr := s.Release(); releaseErr != nil {
 			log.Infof("Error releasing after init failure %s: %s", err, releaseErr)
 		}
 		s.setRuntimeState(runtimeInitFailed)
