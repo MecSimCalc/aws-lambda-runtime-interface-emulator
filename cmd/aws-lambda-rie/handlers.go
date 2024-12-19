@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -93,6 +94,13 @@ func InvokeHandler(w http.ResponseWriter, r *http.Request, sandbox Sandbox, bs i
 		return
 	}
 
+	rawClientContext, err := base64.StdEncoding.DecodeString(r.Header.Get("X-Amz-Client-Context"))
+	if err != nil {
+		log.Errorf("Failed to decode X-Amz-Client-Context: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+
 	initDuration := ""
 	inv := GetenvWithDefault("AWS_LAMBDA_FUNCTION_TIMEOUT", "300")
 	timeoutDuration, _ := time.ParseDuration(inv + "s")
@@ -126,6 +134,7 @@ func InvokeHandler(w http.ResponseWriter, r *http.Request, sandbox Sandbox, bs i
 		TraceID:            r.Header.Get("X-Amzn-Trace-Id"),
 		LambdaSegmentID:    r.Header.Get("X-Amzn-Segment-Id"),
 		Payload:            bytes.NewReader(bodyBytes),
+		ClientContext:      string(rawClientContext),
 	}
 	fmt.Println("START RequestId: " + invokePayload.ID + " Version: " + functionVersion)
 
@@ -177,7 +186,7 @@ func InvokeHandler(w http.ResponseWriter, r *http.Request, sandbox Sandbox, bs i
 		case rapidcore.ErrInvokeTimeout:
 			printEndReports(invokePayload.ID, initDuration, memorySize, invokeStart, timeoutDuration)
 
-			invokeResp.Write([]byte(fmt.Sprintf("Task timed out after %d.00 seconds", timeout)))
+			w.Write([]byte(fmt.Sprintf("Task timed out after %d.00 seconds", timeout)))
 			w.Write(invokeResp.Body)	
 			time.Sleep(100 * time.Millisecond)
 			//initDone = false

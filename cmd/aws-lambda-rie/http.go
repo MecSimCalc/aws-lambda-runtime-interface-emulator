@@ -21,8 +21,6 @@ func startHTTPServer(ipport string, sandbox *rapidcore.SandboxBuilder, bs intero
 		Addr: ipport,
 	}
 
-	log.Warnf("Listening on %s", ipport)
-
 	maxInvocations := -1 // -1 means unlimited invocations
 	// Get max invocations from environment variable
 	maxInvocationsStr := os.Getenv("AWS_LAMBDA_SERVER_MAX_INVOCATIONS")
@@ -88,7 +86,7 @@ func startHTTPServer(ipport string, sandbox *rapidcore.SandboxBuilder, bs intero
 		})
 	})
 
-
+	// go routine (main thread waits)
 	// go routine to handle server shutdown (main thread waits)
 	go func() {
 		<-shutdownChan
@@ -102,4 +100,5 @@ func startHTTPServer(ipport string, sandbox *rapidcore.SandboxBuilder, bs intero
 		log.Panic(err)
 	}
 
+	log.Warnf("Listening on %s", ipport)
 }

@@ -3,6 +3,12 @@
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/aws/aws-lambda-runtime-interface-emulator)
 ![GitHub](https://img.shields.io/github/license/aws/aws-lambda-runtime-interface-emulator)
 
+## Build instructions
+1. Delete the old binaries in /bin
+2. On a linux machine, run `make -j4` to build the binaries
+3. Upload the new binaries to git
+4. Re-build images on a linux machine using the new binaries
+
 ## Patches
 -  [Fix already reserved panic on concurrent invokes](https://github.com/aws/aws-lambda-runtime-interface-emulator/pull/133)
 
@@ -173,11 +179,6 @@ The rest of these Environment Variables can be set to match AWS Lambda's environ
 * `AWS_LAMBDA_FUNCTION_VERSION`
 * `AWS_LAMBDA_FUNCTION_NAME`
 * `AWS_LAMBDA_FUNCTION_MEMORY_SIZE`
-* `AWS_LAMBDA_SERVER_MAX_INVOCATIONS`
-* `API_ACCESS_KEY`
-
-Request headers:
-* `forward-response` to forward api response to server
 
 ## Level of support
 
