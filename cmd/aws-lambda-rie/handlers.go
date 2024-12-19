@@ -72,12 +72,24 @@ func printEndReports(invokeId string, initDuration string, memorySize string, in
 		invokeId, invokeDuration, math.Ceil(invokeDuration), memorySize, memorySize)
 }
 
-func InvokeHandler(w http.ResponseWriter, r *http.Request, sandbox Sandbox, bs interop.Bootstrap) {
+func InvokeHandler(w http.ResponseWriter, r *http.Request, sandbox Sandbox, bs interop.Bootstrap, doneCallback func(invokeResp *ResponseWriterProxy)) {
 	log.Debugf("invoke: -> %s %s %v", r.Method, r.URL, r.Header)
 	bodyBytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		log.Errorf("Failed to read invoke body: %s", err)
 		w.WriteHeader(500)
+		return
+	}
+
+	// Fix CORS error: https://github.com/aws/aws-lambda-runtime-interface-emulator/pull/84/files#diff-2c1a36d379bd5ed6e893749912ac8473cc46dddf5765024d46b44da2eb56348d
+	if origin := r.Header.Get("Origin"); origin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", GetenvWithDefault("ACCESS_CONTROL_ALLOW_ORIGIN", origin))
+		w.Header().Set("Access-Control-Allow-Methods", GetenvWithDefault("ACCESS_CONTROL_ALLOW_METHODS", "POST, OPTIONS"))
+		w.Header().Set("Access-Control-Allow-Headers", GetenvWithDefault("ACCESS_CONTROL_ALLOW_HEADERS", "*"))
+		w.Header().Set("Access-Control-Allow-Credentials", GetenvWithDefault("ACCESS_CONTROL_ALLOW_CREDENTIALS", "true"))
+	}
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(200)
 		return
 	}
 
@@ -165,9 +177,11 @@ func InvokeHandler(w http.ResponseWriter, r *http.Request, sandbox Sandbox, bs i
 		case rapidcore.ErrInvokeTimeout:
 			printEndReports(invokePayload.ID, initDuration, memorySize, invokeStart, timeoutDuration)
 
-			w.Write([]byte(fmt.Sprintf("Task timed out after %d.00 seconds", timeout)))
+			invokeResp.Write([]byte(fmt.Sprintf("Task timed out after %d.00 seconds", timeout)))
+			w.Write(invokeResp.Body)	
 			time.Sleep(100 * time.Millisecond)
 			//initDone = false
+			doneCallback(invokeResp) // Call done after printEndReports
 			return
 		}
 	}
@@ -178,6 +192,8 @@ func InvokeHandler(w http.ResponseWriter, r *http.Request, sandbox Sandbox, bs i
 		w.WriteHeader(invokeResp.StatusCode)
 	}
 	w.Write(invokeResp.Body)
+
+	doneCallback(invokeResp) // Call done after printEndReports
 }
 
 func InitHandler(sandbox Sandbox, functionVersion string, timeout int64, bs interop.Bootstrap) (time.Time, time.Time) {
