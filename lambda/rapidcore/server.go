@@ -1,12 +1,6 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-/**
- * Required patches:
- * - Fix already reserved panic on concurrent invokes
- *		https://github.com/aws/aws-lambda-runtime-interface-emulator/pull/133/files
- */
-
 package rapidcore
 
 import (

@@ -3,14 +3,6 @@
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/aws/aws-lambda-runtime-interface-emulator)
 ![GitHub](https://img.shields.io/github/license/aws/aws-lambda-runtime-interface-emulator)
 
-## Build instructions
-1. Delete the old binaries in /bin
-2. On a linux machine, run `make -j4` to build the binaries
-3. Upload the new binaries to git
-4. Re-build images on a linux machine using the new binaries
-
-## Patches
--  [Fix already reserved panic on concurrent invokes](https://github.com/aws/aws-lambda-runtime-interface-emulator/pull/133)
 
 The Lambda Runtime Interface Emulator is a proxy for Lambda’s Runtime and Extensions APIs, which allows customers to
 locally test their Lambda function packaged as a container image. It is a lightweight web-server that converts
