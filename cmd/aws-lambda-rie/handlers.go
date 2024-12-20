@@ -185,7 +185,7 @@ func InvokeHandler(w http.ResponseWriter, r *http.Request, sandbox Sandbox, bs i
 			return
 		case rapidcore.ErrInvokeTimeout:
 			printEndReports(invokePayload.ID, initDuration, memorySize, invokeStart, timeoutDuration)
-			invokeResp.Write([]byte(fmt.Sprintf("Task timed out after %d.00 seconds. Increase timeout and try again.", timeout)))
+			invokeResp.Write([]byte(fmt.Sprintf("Task timed out after %d.00 seconds", timeout)))
 			w.Write(invokeResp.Body)
 			time.Sleep(100 * time.Millisecond)
 			//initDone = false
